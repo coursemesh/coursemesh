@@ -31,13 +31,30 @@ class AppConfig:
     output_calendar: Path
 
 
+def _resolve_inside(base: Path, raw: str, field: str) -> Path:
+    base = base.resolve()
+    candidate = (base / raw).resolve()
+    if not candidate.is_relative_to(base):
+        raise ValueError(f"{field} must stay inside the config directory")
+    return candidate
+
+
 def load_config(path: Path) -> AppConfig:
+    path = path.resolve()
     with path.open("rb") as handle:
         data = tomllib.load(handle)
 
     app = data.get("coursemesh", {})
-    state_dir = (path.parent / app.get("state_dir", ".coursemesh")).resolve()
-    output_calendar = (path.parent / app.get("output_calendar", ".coursemesh/calendar.ics")).resolve()
+    state_dir = _resolve_inside(
+        path.parent,
+        str(app.get("state_dir", ".coursemesh")),
+        "state_dir",
+    )
+    output_calendar = _resolve_inside(
+        path.parent,
+        str(app.get("output_calendar", ".coursemesh/calendar.ics")),
+        "output_calendar",
+    )
 
     sources: list[SourceConfig] = []
     seen: set[str] = set()
@@ -51,12 +68,18 @@ def load_config(path: Path) -> AppConfig:
         kind = str(raw.get("type", "ics")).strip().lower()
         if kind not in {"ics", "moodle_ics", "studip_ics"}:
             raise ValueError(f"Unsupported source type: {kind}")
+
+        raw_path = raw.get("path")
         source = SourceConfig(
             id=source_id,
             name=str(raw.get("name", source_id)).strip() or source_id,
             kind=kind,
             url=raw.get("url"),
-            path=raw.get("path"),
+            path=(
+                str(_resolve_inside(path.parent, str(raw_path), f"source {source_id!r} path"))
+                if raw_path is not None
+                else None
+            ),
             url_env=raw.get("url_env"),
         )
         selectors = sum(bool(x) for x in (source.url, source.path, source.url_env))

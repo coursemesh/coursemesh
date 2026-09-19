@@ -35,6 +35,29 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Duplicate source id"):
                 load_config(cfg)
 
+    def test_rejects_output_path_outside_config_directory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            project = root / "project"
+            project.mkdir()
+            cfg = project / "coursemesh.toml"
+            cfg.write_text(
+                '[coursemesh]\noutput_calendar="../outside.ics"\n'
+                '[[sources]]\nid="demo"\npath="demo.ics"\n'
+            )
+            with self.assertRaisesRegex(ValueError, "output_calendar must stay inside"):
+                load_config(cfg)
+
+    def test_rejects_source_path_outside_config_directory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            project = root / "project"
+            project.mkdir()
+            cfg = project / "coursemesh.toml"
+            cfg.write_text('[[sources]]\nid="demo"\npath="../private.ics"\n')
+            with self.assertRaisesRegex(ValueError, "path must stay inside"):
+                load_config(cfg)
+
 
 if __name__ == "__main__":
     unittest.main()
