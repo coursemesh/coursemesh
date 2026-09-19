@@ -4,7 +4,7 @@ CourseMesh is a local-first command-line tool that combines course calendar feed
 
 It is designed for students whose schedules are split across Moodle, Stud.IP, department calendars, and other iCalendar sources. CourseMesh has no hosted backend, no account system, and no telemetry. Provider data is fetched directly by the user's machine and state is kept locally.
 
-> **Status:** alpha. Moodle-generated ICS file exports have been validated against a real export. Live Moodle calendar-URL synchronization and Stud.IP deployment compatibility still need broader validation.
+> **Status:** alpha. Moodle-generated ICS file exports and one maintainer-controlled live Moodle calendar URL have been validated end to end. This does not imply universal Moodle compatibility; Stud.IP deployment compatibility still needs real-provider validation.
 
 ## What it does
 

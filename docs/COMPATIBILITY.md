@@ -2,25 +2,26 @@
 
 CourseMesh separates **implemented parsing paths** from **real-provider validation**. A provider name in configuration is not a claim that every institutional deployment has been tested.
 
-| Source | v0.1 path | Upstream interface | Repository tests | Live deployment validation |
+| Source | Support path | Upstream interface | Repository tests | Live deployment validation |
 | --- | --- | --- | --- | --- |
 | Generic ICS file | Supported | iCalendar file | Event, recurrence, folding, and `VTIMEZONE` regression coverage | N/A |
 | Generic HTTP(S) ICS | Supported | iCalendar URL | Fetch/state tests including `ETag`, `Last-Modified`, URL-bound cache identity, and `304` recovery | Not tracked per server |
-| Moodle | ICS preset | Moodle calendar export | Generic ICS behavior | **Validated by maintainer against a real Moodle ICS file export** |
+| Moodle | ICS preset | Moodle calendar export URL/file | Generic ICS behavior plus loopback HTTP conditional-request integration coverage | **Validated by maintainer against a real ICS file export and one live Moodle calendar URL** |
 | Stud.IP | ICS preset | Stud.IP external calendar URL | Generic ICS behavior | **Needs maintainer/community validation** |
 
 ### Moodle validation
 
-Maintainer validation on 2026-09-19:
+Maintainer validation on 2026-09-19 covered both an exported file and a maintainer-controlled live calendar URL:
 
-- real Moodle calendar ICS export;
 - macOS;
-- initial sync succeeded with 2 events;
-- repeated syncs remained stable with the same 2 events;
-- status reported no errors;
-- no private calendar URL, token, student data, or raw export is stored in the repository.
+- real Moodle calendar ICS file export: initial sync succeeded with 2 events and repeated syncs remained stable;
+- live Moodle calendar URL: initial sync succeeded with 2 events and reported 2 new changes;
+- a second live URL sync succeeded with the same 2 events and reported 0 changes;
+- the deployment supplied `Last-Modified` but no `ETag`; CourseMesh persisted the validator, while this deployment returned a full response rather than `304 Not Modified` on the immediate second sync;
+- both live syncs completed without source errors;
+- no private calendar URL, token, student data, raw export, or generated provider state is stored in the repository.
 
-This validates parsing and state handling for a real Moodle ICS file export. Live Moodle calendar-URL synchronization has not yet been validated.
+This validates CourseMesh against one real Moodle deployment and one exported calendar from that workflow. It is not a claim that every Moodle version or institutional configuration behaves identically. Conditional-request behavior is provider-specific: the validated deployment exposed `Last-Modified`, while the repository's loopback integration test separately verifies CourseMesh's `304 Not Modified` path.
 
 ## What counts as validated
 

@@ -44,9 +44,19 @@ Before the first publish:
 2. Configure a PyPI Trusted Publisher for this GitHub repository and the `pypi` GitHub environment.
 3. Protect the `pypi` environment in repository settings if desired.
 
-Then run **Publish to PyPI** from GitHub Actions and provide an existing release tag such as `v0.1.0`.
+Then run **Publish to PyPI** from GitHub Actions and provide the exact release tag, for example `v0.2.0`.
 
 The workflow uses OpenID Connect rather than storing a long-lived PyPI API token in GitHub Secrets.
+
+After publishing, verify the public artifact from a clean environment rather than reusing the local build:
+
+```bash
+python -m venv /tmp/coursemesh-pypi-smoke
+/tmp/coursemesh-pypi-smoke/bin/python -m pip install --disable-pip-version-check --no-deps "coursemesh==0.2.0"
+/tmp/coursemesh-pypi-smoke/bin/coursemesh --version
+```
+
+This final check proves that the package users can actually retrieve from PyPI is installable and reports the intended version.
 
 ## Failed releases
 
