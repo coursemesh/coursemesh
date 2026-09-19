@@ -7,5 +7,9 @@ dist/
 build/
 *.egg-info/
 .env
+
+# Local/private CourseMesh data
+/coursemesh.toml
+/private/
 .DS_Store
 .idea
