@@ -101,6 +101,15 @@ class CalendarTimeZone:
         return cls(tzid=data["tzid"], lines=tuple(data["lines"]))
 
 
+@dataclass(frozen=True)
+class HttpCacheState:
+    """Opaque HTTP validators bound to one resolved calendar URL."""
+
+    resource_key: str
+    etag: str | None = None
+    last_modified: str | None = None
+
+
 def unescape_text(value: str) -> str:
     return (
         value.replace("\\n", "\n")

@@ -43,7 +43,7 @@ coursemesh.toml + environment
 
 ### Fetch
 
-`fetch.py` is the I/O boundary. It accepts only local files and HTTP(S). Future authenticated provider APIs belong behind this boundary rather than in the parser.
+`fetch.py` is the I/O boundary. It accepts only local files and HTTP(S). For HTTP sources it applies persisted `ETag` / `Last-Modified` validators when they belong to the same resolved feed URL, and handles `304 Not Modified` without reparsing the previous snapshot. Future authenticated provider APIs belong behind this boundary rather than in the parser.
 
 ### iCalendar
 
@@ -51,7 +51,7 @@ coursemesh.toml + environment
 
 ### State
 
-`state.py` owns persistence and diff semantics. A source update is transactional. Events and timezone definitions are stored in the same source snapshot, and errors are recorded without deleting the last successful snapshot.
+`state.py` owns persistence and diff semantics. A source update is transactional. Events, timezone definitions, and HTTP cache validators are stored with the successful source state. Errors are recorded without deleting the last successful snapshot. HTTP validators remain available across transient errors and a successful `304` refreshes source health without rewriting calendar data.
 
 ### Sync orchestration
 

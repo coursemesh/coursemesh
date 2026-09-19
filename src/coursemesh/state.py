@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 
-from .models import CalendarEvent, CalendarTimeZone
+from .models import CalendarEvent, CalendarTimeZone, HttpCacheState
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,10 @@ class StateStore:
                 last_attempt_at TEXT,
                 last_success_at TEXT,
                 last_error TEXT,
-                event_count INTEGER NOT NULL DEFAULT 0
+                event_count INTEGER NOT NULL DEFAULT 0,
+                http_resource_key TEXT,
+                http_etag TEXT,
+                http_last_modified TEXT
             )
             """
         )
@@ -61,6 +64,12 @@ class StateStore:
             self.connection.execute("ALTER TABLE sources ADD COLUMN last_attempt_at TEXT")
         if "last_success_at" not in source_columns:
             self.connection.execute("ALTER TABLE sources ADD COLUMN last_success_at TEXT")
+        if "http_resource_key" not in source_columns:
+            self.connection.execute("ALTER TABLE sources ADD COLUMN http_resource_key TEXT")
+        if "http_etag" not in source_columns:
+            self.connection.execute("ALTER TABLE sources ADD COLUMN http_etag TEXT")
+        if "http_last_modified" not in source_columns:
+            self.connection.execute("ALTER TABLE sources ADD COLUMN http_last_modified TEXT")
         self.connection.execute(
             """
             UPDATE sources
@@ -132,6 +141,7 @@ class StateStore:
         source_name: str,
         events: list[CalendarEvent],
         timezones: list[CalendarTimeZone] | None = None,
+        http_cache: HttpCacheState | None = None,
     ) -> list[Change]:
         timezones = list(timezones or ())
         event_keys = [event.instance_key for event in events]
@@ -176,18 +186,32 @@ class StateStore:
                 """
                 INSERT INTO sources(
                     source_id, source_name, last_sync_at, last_attempt_at,
-                    last_success_at, last_error, event_count
+                    last_success_at, last_error, event_count,
+                    http_resource_key, http_etag, http_last_modified
                 )
-                VALUES(?, ?, ?, ?, ?, NULL, ?)
+                VALUES(?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
                 ON CONFLICT(source_id) DO UPDATE SET
                     source_name = excluded.source_name,
                     last_sync_at = excluded.last_sync_at,
                     last_attempt_at = excluded.last_attempt_at,
                     last_success_at = excluded.last_success_at,
                     last_error = NULL,
-                    event_count = excluded.event_count
+                    event_count = excluded.event_count,
+                    http_resource_key = excluded.http_resource_key,
+                    http_etag = excluded.http_etag,
+                    http_last_modified = excluded.http_last_modified
                 """,
-                (source_id, source_name, now, now, now, len(events)),
+                (
+                    source_id,
+                    source_name,
+                    now,
+                    now,
+                    now,
+                    len(events),
+                    http_cache.resource_key if http_cache else None,
+                    http_cache.etag if http_cache else None,
+                    http_cache.last_modified if http_cache else None,
+                ),
             )
             self.connection.execute("DELETE FROM events WHERE source_id = ?", (source_id,))
             self.connection.executemany(
@@ -218,6 +242,65 @@ class StateStore:
                 ],
             )
         return sorted(changes, key=lambda item: (item.kind, item.summary.casefold(), item.uid))
+
+    def source_http_cache(self, source_id: str) -> HttpCacheState | None:
+        row = self.connection.execute(
+            """
+            SELECT http_resource_key, http_etag, http_last_modified
+            FROM sources
+            WHERE source_id = ? AND last_success_at IS NOT NULL
+            """,
+            (source_id,),
+        ).fetchone()
+        if not row or not row[0] or (row[1] is None and row[2] is None):
+            return None
+        return HttpCacheState(row[0], row[1], row[2])
+
+    def record_not_modified(
+        self,
+        source_id: str,
+        source_name: str,
+        http_cache: HttpCacheState,
+    ) -> int:
+        row = self.connection.execute(
+            """
+            SELECT event_count, last_success_at
+            FROM sources WHERE source_id = ?
+            """,
+            (source_id,),
+        ).fetchone()
+        if row is None or row[1] is None:
+            raise ValueError(
+                f"Source {source_id!r} returned HTTP 304 without a successful snapshot"
+            )
+
+        now = datetime.now(timezone.utc).isoformat()
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE sources
+                SET source_name = ?,
+                    last_sync_at = ?,
+                    last_attempt_at = ?,
+                    last_success_at = ?,
+                    last_error = NULL,
+                    http_resource_key = ?,
+                    http_etag = ?,
+                    http_last_modified = ?
+                WHERE source_id = ?
+                """,
+                (
+                    source_name,
+                    now,
+                    now,
+                    now,
+                    http_cache.resource_key,
+                    http_cache.etag,
+                    http_cache.last_modified,
+                    source_id,
+                ),
+            )
+        return int(row[0])
 
     def _validate_timezone_compatibility(
         self, source_id: str, timezones: list[CalendarTimeZone]

@@ -46,6 +46,7 @@ def _sync_json(result) -> dict:
                 "name": source.source_name,
                 "event_count": source.event_count,
                 "error": source.error,
+                "not_modified": source.not_modified,
                 "changes": [
                     {
                         "kind": change.kind,
@@ -114,7 +115,10 @@ def main(argv: list[str] | None = None) -> int:
                 if source.error:
                     print(f"ERROR {source.source_name}: {source.error}")
                     continue
-                print(f"OK {source.source_name}: {source.event_count} event(s)")
+                state = "; not modified" if source.not_modified else ""
+                print(
+                    f"OK {source.source_name}: {source.event_count} event(s){state}"
+                )
                 for change in source.changes:
                     marker = {"new": "+", "changed": "~", "removed": "-"}[change.kind]
                     print(f"  {marker} {change.kind.upper():7} {change.summary}")

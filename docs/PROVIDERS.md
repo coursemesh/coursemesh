@@ -69,6 +69,12 @@ type = "ics"
 path = "calendar.ics"
 ```
 
+## Conditional HTTP requests
+
+When an HTTP(S) provider returns `ETag` or `Last-Modified`, CourseMesh stores those validators locally and sends `If-None-Match` / `If-Modified-Since` on later syncs. A provider can then respond with `304 Not Modified`, allowing CourseMesh to keep the last-known-good snapshot without downloading and reparsing an unchanged calendar.
+
+Validators are tied to a hash of the resolved feed URL. If the configured URL or token changes, CourseMesh does not forward validators learned from the previous endpoint. Providers that do not support conditional requests continue to work with ordinary full responses.
+
 ## Security note
 
 If a generated calendar URL grants access without an interactive login, possession of that URL may be enough to read the feed. Prefer `url_env`; do not paste private URLs into bug reports, screenshots, shell history you plan to publish, or committed configuration.

@@ -1,8 +1,11 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from coursemesh.config import SourceConfig, load_config
+from coursemesh.config import AppConfig, SourceConfig, load_config
+from coursemesh.fetch import FetchResult
+from coursemesh.models import HttpCacheState
 from coursemesh.sync import _safe_error, sync_all
 
 
@@ -88,6 +91,65 @@ class SyncTests(unittest.TestCase):
             merged = (root / "out.ics").read_text()
             self.assertIn("SUMMARY:Local lecture", merged)
             self.assertEqual(merged.count("BEGIN:VTIMEZONE"), 1)
+
+    def test_http_304_reuses_snapshot_without_reparsing(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = SourceConfig(
+                id="remote",
+                name="Remote",
+                kind="ics",
+                url="https://example.invalid/calendar.ics",
+            )
+            cfg = AppConfig((source,), root / ".coursemesh", root / "out.ics")
+            cache = HttpCacheState("resource", '"v1"', None)
+
+            with patch(
+                "coursemesh.sync.fetch_source",
+                side_effect=[
+                    FetchResult(ICS_A, cache),
+                    FetchResult(None, cache, not_modified=True),
+                ],
+            ) as fetch:
+                first = sync_all(cfg)
+                second = sync_all(cfg)
+
+            self.assertFalse(first.failed)
+            self.assertFalse(second.failed)
+            self.assertTrue(second.sources[0].not_modified)
+            self.assertEqual(second.sources[0].event_count, 1)
+            self.assertEqual(second.sources[0].changes, tuple())
+            self.assertIn("SUMMARY:Math lecture", (root / "out.ics").read_text())
+            self.assertIsNone(fetch.call_args_list[0].kwargs["http_cache"])
+            self.assertEqual(fetch.call_args_list[1].kwargs["http_cache"], cache)
+
+    def test_http_304_after_error_clears_error_and_keeps_snapshot(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = SourceConfig(
+                id="remote",
+                name="Remote",
+                kind="ics",
+                url="https://example.invalid/calendar.ics",
+            )
+            cfg = AppConfig((source,), root / ".coursemesh", root / "out.ics")
+            cache = HttpCacheState("resource", '"v1"', None)
+
+            with patch(
+                "coursemesh.sync.fetch_source",
+                side_effect=[
+                    FetchResult(ICS_A, cache),
+                    RuntimeError("temporary network error"),
+                    FetchResult(None, cache, not_modified=True),
+                ],
+            ):
+                self.assertFalse(sync_all(cfg).failed)
+                self.assertTrue(sync_all(cfg).failed)
+                recovered = sync_all(cfg)
+
+            self.assertFalse(recovered.failed)
+            self.assertTrue(recovered.sources[0].not_modified)
+            self.assertIn("SUMMARY:Math lecture", (root / "out.ics").read_text())
 
     def test_broken_source_returns_failure_but_writes_calendar(self):
         with tempfile.TemporaryDirectory() as raw:

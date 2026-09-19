@@ -18,6 +18,7 @@ class SourceResult:
     event_count: int | None
     changes: tuple[Change, ...]
     error: str | None = None
+    not_modified: bool = False
 
 
 @dataclass(frozen=True)
@@ -38,14 +39,44 @@ def sync_all(config: AppConfig) -> SyncResult:
     with StateStore(db_path) as store:
         for source in config.sources:
             try:
-                text = fetch_source(source)
-                calendar = parse_calendar(text)
+                fetched = fetch_source(
+                    source,
+                    http_cache=store.source_http_cache(source.id),
+                )
+                if fetched.not_modified:
+                    if fetched.http_cache is None:
+                        raise ValueError(
+                            "HTTP 304 response is missing validator state"
+                        )
+                    event_count = store.record_not_modified(
+                        source.id, source.name, fetched.http_cache
+                    )
+                    results.append(
+                        SourceResult(
+                            source.id,
+                            source.name,
+                            event_count,
+                            tuple(),
+                            not_modified=True,
+                        )
+                    )
+                    continue
+
+                if fetched.text is None:
+                    raise ValueError("Fetched calendar response has no content")
+                calendar = parse_calendar(fetched.text)
                 events = list(calendar.events)
                 timezones = list(calendar.timezones)
                 changes = store.apply_source(
-                    source.id, source.name, events, timezones
+                    source.id,
+                    source.name,
+                    events,
+                    timezones,
+                    http_cache=fetched.http_cache,
                 )
-                results.append(SourceResult(source.id, source.name, len(events), tuple(changes)))
+                results.append(
+                    SourceResult(source.id, source.name, len(events), tuple(changes))
+                )
             except Exception as exc:  # boundary: keep other sources syncing
                 message = _safe_error(source, exc)
                 store.record_error(source.id, source.name, message)

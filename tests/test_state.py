@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from coursemesh.ical import parse_calendar, parse_events
+from coursemesh.models import HttpCacheState
 from coursemesh.state import StateStore
 
 
@@ -84,6 +85,29 @@ class StateTests(unittest.TestCase):
                 self.assertEqual(len(stored), 1)
                 self.assertEqual(stored[0][1].tzid, "Europe/Berlin")
 
+    def test_http_cache_survives_error_and_304_refreshes_status(self):
+        with tempfile.TemporaryDirectory() as raw:
+            db = Path(raw) / "state.db"
+            cache = HttpCacheState(
+                resource_key="resource",
+                etag='"v1"',
+                last_modified="Sat, 19 Sep 2026 17:00:00 GMT",
+            )
+            with StateStore(db) as store:
+                store.apply_source("demo", "Demo", [event("A")], http_cache=cache)
+                self.assertEqual(store.source_http_cache("demo"), cache)
+
+                store.record_error("demo", "Demo", "temporary outage")
+                self.assertEqual(store.source_http_cache("demo"), cache)
+                self.assertIsNotNone(store.source_status()[0].last_error)
+
+                count = store.record_not_modified("demo", "Demo", cache)
+                self.assertEqual(count, 1)
+                status = store.source_status()[0]
+                self.assertIsNone(status.last_error)
+                self.assertIsNotNone(status.last_success_at)
+                self.assertEqual(len(store.all_events()), 1)
+
     def test_error_does_not_delete_existing_events_or_last_success(self):
         with tempfile.TemporaryDirectory() as raw:
             db = Path(raw) / "state.db"
@@ -134,6 +158,16 @@ class StateTests(unittest.TestCase):
 
             with StateStore(db) as store:
                 self.assertEqual(len(store.all_events()), 1)
+                columns = {
+                    row[1]
+                    for row in store.connection.execute(
+                        "PRAGMA table_info(sources)"
+                    ).fetchall()
+                }
+                self.assertTrue(
+                    {"http_resource_key", "http_etag", "http_last_modified"}
+                    <= columns
+                )
                 status = store.source_status()[0]
                 self.assertEqual(status.last_success_at, "2026-09-19T00:00:00+00:00")
 

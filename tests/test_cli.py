@@ -24,6 +24,7 @@ class CliTests(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["schema_version"], 1)
             self.assertEqual(payload["sources"][0]["changes"][0]["kind"], "new")
+            self.assertFalse(payload["sources"][0]["not_modified"])
 
     def test_status_json_distinguishes_attempt_and_success(self):
         with tempfile.TemporaryDirectory() as raw:
