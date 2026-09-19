@@ -2,7 +2,7 @@
 
 All notable changes to CourseMesh are documented here.
 
-## Unreleased
+## 0.2.0 - 2026-09-19
 
 ### Changed
 
@@ -11,6 +11,14 @@ All notable changes to CourseMesh are documented here.
 - Preserve `VTIMEZONE` components across parsing, local state, provider failures, and merged calendar output.
 - Deduplicate identical timezone definitions and reject conflicting definitions for the same `TZID` instead of emitting an ambiguous calendar.
 - Tighten component parsing so mismatched nested iCalendar components fail explicitly.
+- Validate the complete conditional-request flow through a real loopback HTTP server before release.
+
+### Validation
+
+- Validate a maintainer-controlled Moodle calendar URL end to end on macOS.
+- Confirm an initial live sync succeeds with 2 events and a second live sync remains stable with 0 detected changes.
+- Observe `Last-Modified` support on the validated deployment; the server returned a full response rather than `304 Not Modified` on the immediate second sync.
+- Keep the provider URL, raw calendar data, and generated local state outside the repository.
 
 ## 0.1.1 - 2026-09-19
 
