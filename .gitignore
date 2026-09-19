@@ -9,3 +9,5 @@ build/
 .env
 .DS_Store
 .idea
+private
+coursemesh.toml

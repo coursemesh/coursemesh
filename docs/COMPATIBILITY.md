@@ -6,9 +6,21 @@ CourseMesh separates **implemented parsing paths** from **real-provider validati
 | --- | --- | --- | --- | --- |
 | Generic ICS file | Supported | iCalendar file | Yes | N/A |
 | Generic HTTP(S) ICS | Supported | iCalendar URL | Fetch/state tests; live network is not used in unit tests | Not tracked per server |
-| Moodle | ICS preset | Moodle calendar export URL | Generic ICS behavior | **Needs maintainer/community validation** |
+| Moodle | ICS preset | Moodle calendar export | Generic ICS behavior | **Validated by maintainer against a real Moodle ICS file export** |
 | Stud.IP | ICS preset | Stud.IP external calendar URL | Generic ICS behavior | **Needs maintainer/community validation** |
 
+### Moodle validation
+
+Maintainer validation on 2026-09-19:
+
+- real Moodle calendar ICS export;
+- macOS;
+- initial sync succeeded with 2 events;
+- repeated syncs remained stable with the same 2 events;
+- status reported no errors;
+- no private calendar URL, token, student data, or raw export is stored in the repository.
+
+This validates parsing and state handling for a real Moodle ICS file export. Live Moodle calendar-URL synchronization has not yet been validated.
 ## What counts as validated
 
 A provider can move from “needs validation” to a tested status when we have:
