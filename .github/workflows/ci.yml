@@ -49,7 +49,7 @@ jobs:
       - run: python -m venv /tmp/coursemesh-smoke
       - run: /tmp/coursemesh-smoke/bin/python -m pip install --no-deps dist/*.whl
       - run: /tmp/coursemesh-smoke/bin/coursemesh --version
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: python-package
           path: dist/*
