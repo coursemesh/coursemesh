@@ -3,9 +3,29 @@ import sqlite3
 import tempfile
 import unittest
 
-from coursemesh.ical import parse_events
+from coursemesh.ical import parse_calendar, parse_events
 from coursemesh.state import StateStore
 
+
+
+
+TIMEZONE_ICS = """BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+BEGIN:STANDARD
+DTSTART:20261025T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:x
+SUMMARY:Existing
+DTSTART;TZID=Europe/Berlin:20261102T100000
+END:VEVENT
+END:VCALENDAR
+"""
 
 def event(summary: str, recurrence_id: str | None = None):
     recurrence = f"\nRECURRENCE-ID:{recurrence_id}" if recurrence_id else ""
@@ -47,6 +67,22 @@ class StateTests(unittest.TestCase):
             with StateStore(db) as store:
                 with self.assertRaisesRegex(ValueError, "duplicate VEVENT instances"):
                     store.apply_source("demo", "Demo", [event("A"), event("B")])
+
+    def test_error_preserves_last_known_good_timezones(self):
+        with tempfile.TemporaryDirectory() as raw:
+            db = Path(raw) / "state.db"
+            calendar = parse_calendar(TIMEZONE_ICS)
+            with StateStore(db) as store:
+                store.apply_source(
+                    "demo",
+                    "Demo",
+                    list(calendar.events),
+                    list(calendar.timezones),
+                )
+                store.record_error("demo", "Demo", "network down")
+                stored = store.all_timezones()
+                self.assertEqual(len(stored), 1)
+                self.assertEqual(stored[0][1].tzid, "Europe/Berlin")
 
     def test_error_does_not_delete_existing_events_or_last_success(self):
         with tempfile.TemporaryDirectory() as raw:

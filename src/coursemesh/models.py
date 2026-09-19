@@ -81,6 +81,26 @@ class CalendarEvent:
         )
 
 
+@dataclass(frozen=True)
+class CalendarTimeZone:
+    """An unfolded VTIMEZONE component preserved from an upstream calendar."""
+
+    tzid: str
+    lines: tuple[str, ...]
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {"tzid": self.tzid, "lines": list(self.lines)},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+    @classmethod
+    def from_json(cls, raw: str) -> "CalendarTimeZone":
+        data = json.loads(raw)
+        return cls(tzid=data["tzid"], lines=tuple(data["lines"]))
+
+
 def unescape_text(value: str) -> str:
     return (
         value.replace("\\n", "\n")

@@ -13,6 +13,7 @@ It is designed for students whose schedules are split across Moodle, Stud.IP, de
 - detects new, changed, and removed events between syncs;
 - preserves last-known-good events if one provider fails;
 - writes one merged `.ics` calendar;
+- preserves upstream `VTIMEZONE` definitions required by timezone-aware events;
 - stores synchronization state in local SQLite;
 - provides stable JSON output for automation;
 - has no runtime Python dependencies.

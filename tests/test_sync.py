@@ -9,6 +9,24 @@ from coursemesh.sync import _safe_error, sync_all
 ICS_A = """BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:1\nSUMMARY:Math lecture\nDTSTART:20260920T100000Z\nEND:VEVENT\nEND:VCALENDAR\n"""
 ICS_B = """BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:1\nSUMMARY:Math lecture moved\nDTSTART:20260920T110000Z\nEND:VEVENT\nEND:VCALENDAR\n"""
 
+ICS_TZ = """BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+BEGIN:STANDARD
+DTSTART:20261025T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:2
+SUMMARY:Local lecture
+DTSTART;TZID=Europe/Berlin:20261102T100000
+END:VEVENT
+END:VCALENDAR
+"""
+
 
 class SyncTests(unittest.TestCase):
     def test_local_sync_and_change_detection(self):
@@ -27,6 +45,49 @@ class SyncTests(unittest.TestCase):
             (root / "demo.ics").write_text(ICS_B)
             second = sync_all(cfg)
             self.assertEqual(second.sources[0].changes[0].kind, "changed")
+
+    def test_vtimezone_survives_provider_failure_with_last_known_good_events(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "demo.ics"
+            source.write_text(ICS_TZ)
+            (root / "coursemesh.toml").write_text(
+                '[coursemesh]\noutput_calendar="out.ics"\n[[sources]]\nid="demo"\nname="Demo"\npath="demo.ics"\n'
+            )
+            cfg = load_config(root / "coursemesh.toml")
+            first = sync_all(cfg)
+            self.assertFalse(first.failed)
+            self.assertIn("BEGIN:VTIMEZONE", (root / "out.ics").read_text())
+
+            source.unlink()
+            second = sync_all(cfg)
+            self.assertTrue(second.failed)
+            merged = (root / "out.ics").read_text()
+            self.assertIn("BEGIN:VTIMEZONE", merged)
+            self.assertIn("TZID:Europe/Berlin", merged)
+            self.assertIn("SUMMARY:Local lecture", merged)
+
+    def test_conflicting_timezone_fails_only_conflicting_source(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "a.ics").write_text(ICS_TZ)
+            conflicting = ICS_TZ.replace("UID:2", "UID:3").replace(
+                "TZOFFSETTO:+0100", "TZOFFSETTO:+0200"
+            )
+            (root / "b.ics").write_text(conflicting)
+            (root / "coursemesh.toml").write_text(
+                '[coursemesh]\noutput_calendar="out.ics"\n'
+                '[[sources]]\nid="a"\nname="A"\npath="a.ics"\n'
+                '[[sources]]\nid="b"\nname="B"\npath="b.ics"\n'
+            )
+            cfg = load_config(root / "coursemesh.toml")
+            result = sync_all(cfg)
+            self.assertTrue(result.failed)
+            self.assertIsNone(result.sources[0].error)
+            self.assertIn("Conflicting VTIMEZONE definitions", result.sources[1].error)
+            merged = (root / "out.ics").read_text()
+            self.assertIn("SUMMARY:Local lecture", merged)
+            self.assertEqual(merged.count("BEGIN:VTIMEZONE"), 1)
 
     def test_broken_source_returns_failure_but_writes_calendar(self):
         with tempfile.TemporaryDirectory() as raw:

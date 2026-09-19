@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 
-from .models import CalendarEvent
+from .models import CalendarEvent, CalendarTimeZone
 
 
 @dataclass(frozen=True)
@@ -98,6 +98,17 @@ class StateStore:
                     (source_id, event.instance_key, event.uid, fingerprint, payload),
                 )
             self.connection.execute("DROP TABLE events_legacy")
+        self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS timezones (
+                source_id TEXT NOT NULL,
+                tzid TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                PRIMARY KEY (source_id, tzid),
+                FOREIGN KEY (source_id) REFERENCES sources(source_id) ON DELETE CASCADE
+            )
+            """
+        )
         self.connection.commit()
 
     def _create_events_table(self) -> None:
@@ -115,13 +126,27 @@ class StateStore:
             """
         )
 
-    def apply_source(self, source_id: str, source_name: str, events: list[CalendarEvent]) -> list[Change]:
+    def apply_source(
+        self,
+        source_id: str,
+        source_name: str,
+        events: list[CalendarEvent],
+        timezones: list[CalendarTimeZone] | None = None,
+    ) -> list[Change]:
+        timezones = list(timezones or ())
         event_keys = [event.instance_key for event in events]
         if len(set(event_keys)) != len(event_keys):
             raise ValueError(
                 f"Source {source_id!r} contains duplicate VEVENT instances "
                 "with the same UID and RECURRENCE-ID"
             )
+        tzids = [timezone.tzid for timezone in timezones]
+        if len(set(tzids)) != len(tzids):
+            raise ValueError(
+                f"Source {source_id!r} contains duplicate VTIMEZONE definitions "
+                "with the same TZID"
+            )
+        self._validate_timezone_compatibility(source_id, timezones)
         old_rows = self.connection.execute(
             """
             SELECT event_key, fingerprint, payload_json
@@ -181,7 +206,42 @@ class StateStore:
                     for event in events
                 ],
             )
+            self.connection.execute("DELETE FROM timezones WHERE source_id = ?", (source_id,))
+            self.connection.executemany(
+                """
+                INSERT INTO timezones(source_id, tzid, payload_json)
+                VALUES(?, ?, ?)
+                """,
+                [
+                    (source_id, timezone.tzid, timezone.to_json())
+                    for timezone in timezones
+                ],
+            )
         return sorted(changes, key=lambda item: (item.kind, item.summary.casefold(), item.uid))
+
+    def _validate_timezone_compatibility(
+        self, source_id: str, timezones: list[CalendarTimeZone]
+    ) -> None:
+        if not timezones:
+            return
+        incoming = {timezone.tzid: timezone for timezone in timezones}
+        placeholders = ",".join("?" for _ in incoming)
+        rows = self.connection.execute(
+            f"""
+            SELECT source_id, tzid, payload_json
+            FROM timezones
+            WHERE source_id != ? AND tzid IN ({placeholders})
+            """,
+            (source_id, *incoming),
+        ).fetchall()
+        for existing_source, tzid, payload in rows:
+            existing = CalendarTimeZone.from_json(payload)
+            if existing.lines != incoming[tzid].lines:
+                raise ValueError(
+                    "Conflicting VTIMEZONE definitions for "
+                    f"TZID {tzid!r} from sources "
+                    f"{existing_source!r} and {source_id!r}"
+                )
 
     def record_error(self, source_id: str, source_name: str, message: str) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -213,6 +273,19 @@ class StateStore:
         return [
             (source_id, source_name, CalendarEvent.from_json(payload))
             for source_id, source_name, payload in rows
+        ]
+
+    def all_timezones(self) -> list[tuple[str, CalendarTimeZone]]:
+        rows = self.connection.execute(
+            """
+            SELECT source_id, payload_json
+            FROM timezones
+            ORDER BY source_id, tzid
+            """
+        ).fetchall()
+        return [
+            (source_id, CalendarTimeZone.from_json(payload))
+            for source_id, payload in rows
         ]
 
     def source_status(self) -> list[SourceStatus]:
