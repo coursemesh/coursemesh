@@ -7,7 +7,7 @@ import tempfile
 
 from .config import AppConfig, SourceConfig
 from .fetch import fetch_source
-from .ical import parse_events, render_calendar
+from .ical import parse_calendar, render_calendar
 from .state import Change, StateStore
 
 
@@ -39,15 +39,19 @@ def sync_all(config: AppConfig) -> SyncResult:
         for source in config.sources:
             try:
                 text = fetch_source(source)
-                events = parse_events(text)
-                changes = store.apply_source(source.id, source.name, events)
+                calendar = parse_calendar(text)
+                events = list(calendar.events)
+                timezones = list(calendar.timezones)
+                changes = store.apply_source(
+                    source.id, source.name, events, timezones
+                )
                 results.append(SourceResult(source.id, source.name, len(events), tuple(changes)))
             except Exception as exc:  # boundary: keep other sources syncing
                 message = _safe_error(source, exc)
                 store.record_error(source.id, source.name, message)
                 results.append(SourceResult(source.id, source.name, None, tuple(), message))
 
-        merged = render_calendar(store.all_events())
+        merged = render_calendar(store.all_events(), store.all_timezones())
         _atomic_write_text(config.output_calendar, merged)
 
     return SyncResult(tuple(results), config.output_calendar)

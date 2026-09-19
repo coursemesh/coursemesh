@@ -4,7 +4,7 @@ CourseMesh separates **implemented parsing paths** from **real-provider validati
 
 | Source | v0.1 path | Upstream interface | Repository tests | Live deployment validation |
 | --- | --- | --- | --- | --- |
-| Generic ICS file | Supported | iCalendar file | Yes | N/A |
+| Generic ICS file | Supported | iCalendar file | Event, recurrence, folding, and `VTIMEZONE` regression coverage | N/A |
 | Generic HTTP(S) ICS | Supported | iCalendar URL | Fetch/state tests; live network is not used in unit tests | Not tracked per server |
 | Moodle | ICS preset | Moodle calendar export | Generic ICS behavior | **Validated by maintainer against a real Moodle ICS file export** |
 | Stud.IP | ICS preset | Stud.IP external calendar URL | Generic ICS behavior | **Needs maintainer/community validation** |
@@ -44,3 +44,9 @@ Run CourseMesh against your own export, then report:
 - sanitized example lines only when necessary to reproduce a parser issue.
 
 Never include the private calendar URL itself.
+
+## Calendar fidelity
+
+CourseMesh preserves `VTIMEZONE` components from successful source snapshots and writes them before merged events. Identical definitions for the same `TZID` are deduplicated. If two sources provide different definitions for the same `TZID`, CourseMesh fails the merge instead of silently choosing one and producing ambiguous timezone semantics.
+
+This behavior is covered by synthetic RFC-style regression fixtures. The maintainer's current Moodle validation export uses UTC/floating timestamps and therefore does not independently validate provider-generated `VTIMEZONE` blocks.

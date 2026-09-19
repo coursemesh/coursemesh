@@ -1,9 +1,12 @@
 import unittest
 
-from coursemesh.ical import parse_events, render_calendar
+from coursemesh.ical import parse_calendar, parse_events, render_calendar
+from coursemesh.models import CalendarTimeZone
 
 
 SAMPLE = """BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:abc-1\r\nSUMMARY:Operating Systems Sheet 4\r\nDESCRIPTION:Line one\\nLine two\r\nDTSTART:20260924T215900Z\r\nDTEND:20260924T225900Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"""
+
+TIMEZONE_SAMPLE = """BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTIMEZONE\r\nTZID:Europe/Berlin\r\nBEGIN:STANDARD\r\nDTSTART:20261025T030000\r\nTZOFFSETFROM:+0200\r\nTZOFFSETTO:+0100\r\nTZNAME:CET\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\nBEGIN:VEVENT\r\nUID:tz-1\r\nSUMMARY:Local lecture\r\nDTSTART;TZID=Europe/Berlin:20261102T100000\r\nDTEND;TZID=Europe/Berlin:20261102T110000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"""
 
 
 class ICalTests(unittest.TestCase):
@@ -37,6 +40,47 @@ class ICalTests(unittest.TestCase):
         self.assertIn("UID:moodle.abc-1", output)
         self.assertIn("X-COURSEMESH-SOURCE:moodle", output)
         self.assertIn("SUMMARY:Operating Systems Sheet 4", output)
+
+    def test_parse_calendar_preserves_vtimezone(self):
+        calendar = parse_calendar(TIMEZONE_SAMPLE)
+        self.assertEqual(len(calendar.events), 1)
+        self.assertEqual(len(calendar.timezones), 1)
+        timezone = calendar.timezones[0]
+        self.assertEqual(timezone.tzid, "Europe/Berlin")
+        self.assertIn("BEGIN:STANDARD", timezone.lines)
+        self.assertIn("TZOFFSETTO:+0100", timezone.lines)
+
+    def test_render_calendar_preserves_vtimezone_before_events(self):
+        calendar = parse_calendar(TIMEZONE_SAMPLE)
+        output = render_calendar(
+            [("moodle", "Moodle", calendar.events[0])],
+            [("moodle", calendar.timezones[0])],
+        )
+        self.assertIn("BEGIN:VTIMEZONE\r\nTZID:Europe/Berlin", output)
+        self.assertLess(output.index("BEGIN:VTIMEZONE"), output.index("BEGIN:VEVENT"))
+        self.assertIn("DTSTART;TZID=Europe/Berlin:20261102T100000", output)
+
+    def test_render_deduplicates_identical_vtimezones(self):
+        timezone = parse_calendar(TIMEZONE_SAMPLE).timezones[0]
+        output = render_calendar([], [("a", timezone), ("b", timezone)])
+        self.assertEqual(output.count("BEGIN:VTIMEZONE"), 1)
+
+    def test_render_rejects_conflicting_vtimezone_definitions(self):
+        first = parse_calendar(TIMEZONE_SAMPLE).timezones[0]
+        second = CalendarTimeZone(
+            tzid=first.tzid,
+            lines=tuple(
+                line.replace("TZOFFSETTO:+0100", "TZOFFSETTO:+0200")
+                for line in first.lines
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "Conflicting VTIMEZONE definitions"):
+            render_calendar([], [("a", first), ("b", second)])
+
+    def test_parse_rejects_mismatched_component_end(self):
+        text = "BEGIN:VEVENT\nUID:x\nBEGIN:VALARM\nEND:VEVENT\n"
+        with self.assertRaisesRegex(ValueError, "Mismatched iCalendar component ending"):
+            parse_events(text)
 
 
 if __name__ == "__main__":

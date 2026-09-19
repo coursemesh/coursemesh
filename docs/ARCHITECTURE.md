@@ -19,14 +19,14 @@ coursemesh.toml + environment
         ICS parser
             |
             v
-      CalendarEvent[]
+  events + VTIMEZONE[]
             |
             v
         StateStore  <---- previous successful snapshot
             |
        +----+----+
        |         |
-     diffs    last-known-good events
+     diffs    last-known-good calendar data
        |         |
        v         v
       CLI     ICS renderer
@@ -47,11 +47,11 @@ coursemesh.toml + environment
 
 ### iCalendar
 
-`ical.py` owns syntax-level parsing and rendering. It does not know Moodle or Stud.IP. `VEVENT` content lines are retained so provider-specific fields can survive a merge.
+`ical.py` owns syntax-level parsing and rendering. It does not know Moodle or Stud.IP. `VEVENT` content lines are retained so provider-specific fields can survive a merge. `VTIMEZONE` components are preserved because RFC 5545 timezone-aware properties can depend on their definitions. Identical timezone definitions are deduplicated during merge; conflicting definitions for the same `TZID` are rejected rather than producing an ambiguous calendar.
 
 ### State
 
-`state.py` owns persistence and diff semantics. A source update is transactional. Errors are recorded without deleting the last successful events.
+`state.py` owns persistence and diff semantics. A source update is transactional. Events and timezone definitions are stored in the same source snapshot, and errors are recorded without deleting the last successful snapshot.
 
 ### Sync orchestration
 

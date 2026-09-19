@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from . import __version__
-from .models import CalendarEvent, ContentLine
+from .models import CalendarEvent, CalendarTimeZone, ContentLine
+
+
+@dataclass(frozen=True)
+class ParsedCalendar:
+    events: tuple[CalendarEvent, ...]
+    timezones: tuple[CalendarTimeZone, ...]
 
 
 def unfold_lines(text: str) -> list[str]:
@@ -49,42 +56,94 @@ def _value_separator(raw: str) -> int | None:
     return None
 
 
-def parse_events(text: str) -> list[CalendarEvent]:
+def parse_calendar(text: str) -> ParsedCalendar:
+    lines = unfold_lines(text)
     events: list[CalendarEvent] = []
-    current: list[ContentLine] | None = None
-    nested_depth = 0
+    timezones: list[CalendarTimeZone] = []
+    index = 0
 
-    for raw in unfold_lines(text):
-        upper = raw.upper()
+    while index < len(lines):
+        upper = lines[index].upper()
         if upper == "BEGIN:VEVENT":
-            if current is not None:
-                raise ValueError("Nested VEVENT is not valid")
-            current = []
-            nested_depth = 0
+            component, index = _consume_component(lines, index, "VEVENT")
+            events.append(_parse_event(component))
             continue
-        if current is None:
+        if upper == "BEGIN:VTIMEZONE":
+            component, index = _consume_component(lines, index, "VTIMEZONE")
+            timezones.append(_parse_timezone(component))
             continue
-        if upper.startswith("BEGIN:"):
-            nested_depth += 1
-            current.append(parse_content_line(raw))
-            continue
-        if upper.startswith("END:") and upper != "END:VEVENT":
-            nested_depth = max(0, nested_depth - 1)
-            current.append(parse_content_line(raw))
-            continue
-        if upper == "END:VEVENT" and nested_depth == 0:
-            uid = next((line.value for line in current if line.name == "UID"), None)
-            if not uid:
-                raise ValueError("VEVENT is missing required UID")
-            events.append(CalendarEvent(uid=uid, lines=current))
-            current = None
-            continue
-        if raw:
-            current.append(parse_content_line(raw))
+        index += 1
 
-    if current is not None:
-        raise ValueError("Unclosed VEVENT")
-    return events
+    tzids = [timezone.tzid for timezone in timezones]
+    if len(set(tzids)) != len(tzids):
+        raise ValueError("iCalendar contains duplicate VTIMEZONE definitions for the same TZID")
+
+    return ParsedCalendar(tuple(events), tuple(timezones))
+
+
+def parse_events(text: str) -> list[CalendarEvent]:
+    """Backward-compatible event-only parser used by callers and tests."""
+
+    return list(parse_calendar(text).events)
+
+
+def _consume_component(
+    lines: list[str], start: int, component_name: str
+) -> tuple[list[str], int]:
+    stack = [component_name]
+    component = [lines[start]]
+
+    for index in range(start + 1, len(lines)):
+        raw = lines[index]
+        upper = raw.upper()
+        if upper.startswith("BEGIN:"):
+            stack.append(upper.split(":", 1)[1])
+        elif upper.startswith("END:"):
+            ending = upper.split(":", 1)[1]
+            if not stack or ending != stack[-1]:
+                expected = stack[-1] if stack else "nothing"
+                raise ValueError(
+                    f"Mismatched iCalendar component ending {ending!r}; expected {expected!r}"
+                )
+            stack.pop()
+
+        component.append(raw)
+        if not stack:
+            return component, index + 1
+
+    raise ValueError(f"Unclosed {component_name} component")
+
+
+def _parse_event(component: list[str]) -> CalendarEvent:
+    lines = [parse_content_line(raw) for raw in component[1:-1] if raw]
+    uid = next((line.value for line in lines if line.name == "UID"), None)
+    if not uid:
+        raise ValueError("VEVENT is missing required UID")
+    return CalendarEvent(uid=uid, lines=lines)
+
+
+def _parse_timezone(component: list[str]) -> CalendarTimeZone:
+    depth = 0
+    tzids: list[str] = []
+
+    for raw in component[1:-1]:
+        if not raw:
+            continue
+        upper = raw.upper()
+        if upper.startswith("BEGIN:"):
+            depth += 1
+            continue
+        if upper.startswith("END:"):
+            depth -= 1
+            continue
+        if depth == 0:
+            line = parse_content_line(raw)
+            if line.name == "TZID":
+                tzids.append(line.value)
+
+    if len(tzids) != 1 or not tzids[0]:
+        raise ValueError("VTIMEZONE must contain exactly one non-empty TZID")
+    return CalendarTimeZone(tzid=tzids[0], lines=tuple(line for line in component if line))
 
 
 def fold_line(line: str, limit: int = 75) -> list[str]:
@@ -111,7 +170,10 @@ def fold_line(line: str, limit: int = 75) -> list[str]:
     return chunks
 
 
-def render_calendar(events: Iterable[tuple[str, str, CalendarEvent]]) -> str:
+def render_calendar(
+    events: Iterable[tuple[str, str, CalendarEvent]],
+    timezones: Iterable[tuple[str, CalendarTimeZone]] = (),
+) -> str:
     out = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -119,6 +181,8 @@ def render_calendar(events: Iterable[tuple[str, str, CalendarEvent]]) -> str:
         "CALSCALE:GREGORIAN",
         "X-WR-CALNAME:CourseMesh",
     ]
+    for timezone in _merge_timezones(timezones):
+        out.extend(timezone.lines)
     for source_id, source_name, event in events:
         out.append("BEGIN:VEVENT")
         out.append(f"UID:{_escape_uid(source_id)}.{event.uid}")
@@ -135,6 +199,25 @@ def render_calendar(events: Iterable[tuple[str, str, CalendarEvent]]) -> str:
     for line in out:
         folded.extend(fold_line(line))
     return "\r\n".join(folded) + "\r\n"
+
+
+def _merge_timezones(
+    timezones: Iterable[tuple[str, CalendarTimeZone]],
+) -> list[CalendarTimeZone]:
+    by_tzid: dict[str, tuple[str, CalendarTimeZone]] = {}
+    for source_id, timezone in timezones:
+        previous = by_tzid.get(timezone.tzid)
+        if previous is None:
+            by_tzid[timezone.tzid] = (source_id, timezone)
+            continue
+        previous_source, previous_timezone = previous
+        if previous_timezone.lines != timezone.lines:
+            raise ValueError(
+                "Conflicting VTIMEZONE definitions for "
+                f"TZID {timezone.tzid!r} from sources "
+                f"{previous_source!r} and {source_id!r}"
+            )
+    return [by_tzid[tzid][1] for tzid in sorted(by_tzid, key=str.casefold)]
 
 
 def _escape_uid(value: str) -> str:
