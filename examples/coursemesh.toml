@@ -1,0 +1,9 @@
+[coursemesh]
+state_dir = ".coursemesh"
+output_calendar = ".coursemesh/calendar.ics"
+
+[[sources]]
+id = "demo"
+name = "Demo course calendar"
+type = "ics"
+path = "demo.ics"

@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible CourseMesh problem
+title: "[bug] "
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Minimal calendar/config sample
+      description: Remove private calendar tokens and personal information first.
+      render: text
+  - type: input
+    attributes:
+      label: CourseMesh version
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Python / OS
+    validations:
+      required: true

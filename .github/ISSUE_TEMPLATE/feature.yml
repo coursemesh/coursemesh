@@ -1,0 +1,19 @@
+name: Feature request
+description: Propose a provider, export, or workflow improvement
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: Student problem
+      description: Describe the workflow problem before proposing the implementation.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Provider documentation or sample format

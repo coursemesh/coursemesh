@@ -1,0 +1,40 @@
+name: Provider support request
+description: Propose support or compatibility work for an LMS/calendar provider
+title: "[provider] "
+labels: [provider]
+body:
+  - type: input
+    id: provider
+    attributes:
+      label: Provider / LMS
+      placeholder: Moodle, Stud.IP, ILIAS, Canvas, ...
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Student workflow
+      description: What should CourseMesh make easier for a student?
+    validations:
+      required: true
+  - type: textarea
+    id: docs
+    attributes:
+      label: Upstream documentation
+      description: Link documented APIs or export formats where possible. Do not paste private calendar URLs.
+    validations:
+      required: true
+  - type: dropdown
+    id: access
+    attributes:
+      label: Can you test this provider with your own account?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Sanitized fixture availability
+      description: Can you provide a small export with names, IDs, tokens, and private course data removed?
