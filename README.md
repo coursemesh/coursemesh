@@ -9,6 +9,7 @@ It is designed for students whose schedules are split across Moodle, Stud.IP, de
 ## What it does
 
 - reads local or HTTP(S) iCalendar feeds;
+- reuses HTTP `ETag` / `Last-Modified` validators so unchanged feeds can return `304 Not Modified`;
 - provides `moodle_ics`, `studip_ics`, and generic `ics` source types;
 - detects new, changed, and removed events between syncs;
 - preserves last-known-good events if one provider fails;

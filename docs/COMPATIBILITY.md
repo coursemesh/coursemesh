@@ -5,7 +5,7 @@ CourseMesh separates **implemented parsing paths** from **real-provider validati
 | Source | v0.1 path | Upstream interface | Repository tests | Live deployment validation |
 | --- | --- | --- | --- | --- |
 | Generic ICS file | Supported | iCalendar file | Event, recurrence, folding, and `VTIMEZONE` regression coverage | N/A |
-| Generic HTTP(S) ICS | Supported | iCalendar URL | Fetch/state tests; live network is not used in unit tests | Not tracked per server |
+| Generic HTTP(S) ICS | Supported | iCalendar URL | Fetch/state tests including `ETag`, `Last-Modified`, URL-bound cache identity, and `304` recovery | Not tracked per server |
 | Moodle | ICS preset | Moodle calendar export | Generic ICS behavior | **Validated by maintainer against a real Moodle ICS file export** |
 | Stud.IP | ICS preset | Stud.IP external calendar URL | Generic ICS behavior | **Needs maintainer/community validation** |
 

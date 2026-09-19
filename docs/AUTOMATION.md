@@ -8,7 +8,7 @@ CourseMesh keeps machine-readable output versioned so scripts do not need to scr
 coursemesh sync --format json
 ```
 
-The top-level `schema_version` is currently `1`. A source includes its event count, an optional error, and zero or more changes. Each change has `kind`, `uid`, and `summary`.
+The top-level `schema_version` is currently `1`. A source includes its event count, an optional error, a boolean `not_modified`, and zero or more changes. Each change has `kind`, `uid`, and `summary`. `not_modified` is true when an HTTP provider answered a conditional request with `304 Not Modified`; in that case the previous successful snapshot remains authoritative.
 
 A sync exits with code `1` when at least one source fails. Healthy sources still update, and the merged calendar is rebuilt from last-known-good state.
 

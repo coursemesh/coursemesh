@@ -23,6 +23,8 @@ Prefer `url_env` for private calendar URLs. CourseMesh intentionally resolves th
 
 Environment variables can still leak through shell history, process inspection on some systems, crash dumps, screenshots, or unrelated tooling. OS keychain storage is planned for a future release.
 
+For HTTP caching, CourseMesh stores provider-supplied `ETag` / `Last-Modified` values and a SHA-256 resource key derived from the resolved feed URL in the local SQLite database. The raw private URL is not stored for this purpose, and cached validators are not reused when the resolved URL changes.
+
 ## Local files
 
 The state database and merged `.ics` output can contain academic information. Protect the user account and filesystem accordingly. CourseMesh does not encrypt local state by itself.

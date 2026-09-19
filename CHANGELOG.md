@@ -6,6 +6,8 @@ All notable changes to CourseMesh are documented here.
 
 ### Changed
 
+- Use HTTP `ETag` and `Last-Modified` validators for conditional calendar requests and reuse last-known-good state on `304 Not Modified`.
+- Bind cached HTTP validators to a hash of the resolved feed URL so they are not forwarded when a source endpoint changes.
 - Preserve `VTIMEZONE` components across parsing, local state, provider failures, and merged calendar output.
 - Deduplicate identical timezone definitions and reject conflicting definitions for the same `TZID` instead of emitting an ambiguous calendar.
 - Tighten component parsing so mismatched nested iCalendar components fail explicitly.
