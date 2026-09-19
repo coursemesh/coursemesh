@@ -21,6 +21,7 @@ Maintainer validation on 2026-09-19:
 - no private calendar URL, token, student data, or raw export is stored in the repository.
 
 This validates parsing and state handling for a real Moodle ICS file export. Live Moodle calendar-URL synchronization has not yet been validated.
+
 ## What counts as validated
 
 A provider can move from “needs validation” to a tested status when we have:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from . import __version__
 from .models import CalendarEvent, ContentLine
 
 
@@ -114,7 +115,7 @@ def render_calendar(events: Iterable[tuple[str, str, CalendarEvent]]) -> str:
     out = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//CourseMesh//CourseMesh 0.1//EN",
+        f"PRODID:-//CourseMesh//CourseMesh {__version__}//EN",
         "CALSCALE:GREGORIAN",
         "X-WR-CALNAME:CourseMesh",
     ]
