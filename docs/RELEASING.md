@@ -34,29 +34,19 @@ A real-provider validation is evidence for release readiness, not a test fixture
 
 Create an annotated or lightweight tag named `vX.Y.Z` and push it. `.github/workflows/release.yml` rebuilds the package, smoke-tests the wheel, creates the GitHub release, and attaches the distributions.
 
-## PyPI
+## Distribution and public artifact verification
 
-PyPI publishing is deliberately a separate manual workflow so a repository fork or accidental tag cannot publish a package.
+GitHub Releases are the canonical distribution channel during the current alpha phase. PyPI publishing is intentionally deferred until there is a concrete user need for registry-based installation.
 
-Before the first publish:
-
-1. Create the `coursemesh` project on PyPI if the name is available.
-2. Configure a PyPI Trusted Publisher for this GitHub repository and the `pypi` GitHub environment.
-3. Protect the `pypi` environment in repository settings if desired.
-
-Then run **Publish to PyPI** from GitHub Actions and provide the exact release tag, for example `v0.2.0`.
-
-The workflow uses OpenID Connect rather than storing a long-lived PyPI API token in GitHub Secrets.
-
-After publishing, verify the public artifact from a clean environment rather than reusing the local build:
+After the release workflow succeeds, download the wheel attached to the GitHub release and verify that exact public artifact in a fresh virtual environment rather than reusing the local build:
 
 ```bash
-python -m venv /tmp/coursemesh-pypi-smoke
-/tmp/coursemesh-pypi-smoke/bin/python -m pip install --disable-pip-version-check --no-deps "coursemesh==0.2.0"
-/tmp/coursemesh-pypi-smoke/bin/coursemesh --version
+python -m venv /tmp/coursemesh-release-smoke
+/tmp/coursemesh-release-smoke/bin/python -m pip install --disable-pip-version-check --no-deps ./coursemesh-X.Y.Z-py3-none-any.whl
+/tmp/coursemesh-release-smoke/bin/coursemesh --version
 ```
 
-This final check proves that the package users can actually retrieve from PyPI is installable and reports the intended version.
+The reported CLI version must match the release tag. This final check proves that the artifact users can retrieve from the GitHub release is installable without introducing a second publishing path.
 
 ## Failed releases
 
