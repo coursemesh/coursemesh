@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "sync":
-        result = sync_all(config, config_path.parent)
+        result = sync_all(config)
         if args.format == "json":
             print(json.dumps(_sync_json(result), ensure_ascii=False, indent=2))
         else:

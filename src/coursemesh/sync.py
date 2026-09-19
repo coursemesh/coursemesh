@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from .config import AppConfig
+from .config import AppConfig, SourceConfig
 from .fetch import fetch_source
 from .ical import parse_events, render_calendar
 from .state import Change, StateStore
@@ -30,7 +30,7 @@ class SyncResult:
         return any(source.error for source in self.sources)
 
 
-def sync_all(config: AppConfig, config_dir: Path) -> SyncResult:
+def sync_all(config: AppConfig) -> SyncResult:
     config.state_dir.mkdir(parents=True, exist_ok=True)
     db_path = config.state_dir / "state.db"
     results: list[SourceResult] = []
@@ -38,7 +38,7 @@ def sync_all(config: AppConfig, config_dir: Path) -> SyncResult:
     with StateStore(db_path) as store:
         for source in config.sources:
             try:
-                text = fetch_source(source, config_dir)
+                text = fetch_source(source)
                 events = parse_events(text)
                 changes = store.apply_source(source.id, source.name, events)
                 results.append(SourceResult(source.id, source.name, len(events), tuple(changes)))
@@ -53,17 +53,20 @@ def sync_all(config: AppConfig, config_dir: Path) -> SyncResult:
     return SyncResult(tuple(results), config.output_calendar)
 
 
-def _safe_error(source, exc: Exception) -> str:
+def _safe_error(source: SourceConfig, exc: Exception) -> str:
     message = f"{type(exc).__name__}: {exc}"
-    candidates = [source.url]
+    replacements: list[tuple[str | None, str]] = [
+        (source.url, "<redacted-calendar-url>"),
+        (str(source.path) if source.path else None, "<redacted-local-calendar-path>"),
+    ]
     if source.url_env:
         try:
-            candidates.append(source.resolved_url())
+            replacements.append((source.resolved_url(), "<redacted-calendar-url>"))
         except Exception:
             pass
-    for secret in candidates:
+    for secret, placeholder in replacements:
         if secret:
-            message = message.replace(secret, "<redacted-calendar-url>")
+            message = message.replace(secret, placeholder)
     return message
 
 

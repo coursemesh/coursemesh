@@ -5,14 +5,15 @@ CourseMesh uses tagged GitHub releases. The release process is intentionally sma
 ## Before tagging
 
 1. Ensure `CHANGELOG.md` describes the release.
-2. Ensure the version in `pyproject.toml` and `src/coursemesh/__init__.py` matches.
-3. Install the packaging helper and run:
+2. Ensure `src/coursemesh/__init__.py` contains the release version. Package metadata reads this value dynamically.
+3. Install the packaging helpers and run:
 
 ```bash
-python -m pip install build
+python -m pip install build twine
 python -m unittest discover -s tests -v
 python -m compileall -q src
 python -m build
+python -m twine check --strict dist/*
 ```
 
 4. Install the wheel into a fresh virtual environment and run `coursemesh --version`.
