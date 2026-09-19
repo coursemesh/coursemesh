@@ -19,6 +19,17 @@ python -m twine check --strict dist/*
 4. Install the wheel into a fresh virtual environment and run `coursemesh --version`.
 5. Push `main` and wait for CI to pass.
 
+## Release evidence
+
+Before a minor release, keep the release evidence focused on behavior that packaging alone cannot establish:
+
+- the full automated test suite passes, including the loopback HTTP integration test that exercises a real request/response cycle, conditional `ETag` reuse, `304 Not Modified`, and a changed upstream response;
+- at least one maintainer-controlled real provider feed is validated end to end without committing its private URL, token, raw calendar, or generated local state;
+- `docs/COMPATIBILITY.md` states exactly what was validated and does not generalize one institutional deployment into universal provider support;
+- the built wheel is installed into a fresh virtual environment and the reported CLI version matches the intended release tag.
+
+A real-provider validation is evidence for release readiness, not a test fixture. Keep credentials and unredacted provider data outside Git.
+
 ## GitHub release
 
 Create an annotated or lightweight tag named `vX.Y.Z` and push it. `.github/workflows/release.yml` rebuilds the package, smoke-tests the wheel, creates the GitHub release, and attaches the distributions.
