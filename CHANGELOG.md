@@ -2,6 +2,13 @@
 
 All notable changes to CourseMesh are documented here.
 
+## Unreleased
+
+### Fixed
+
+- Reject non-iCalendar response bodies before they can replace a source snapshot, so HTML login/error pages cannot turn a healthy calendar into false `removed` changes.
+- Validate top-level `VCALENDAR` envelopes while retaining support for sequential iCalendar objects in a single stream.
+
 ## 0.2.0 - 2026-09-19
 
 ### Changed

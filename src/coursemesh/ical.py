@@ -57,22 +57,28 @@ def _value_separator(raw: str) -> int | None:
 
 
 def parse_calendar(text: str) -> ParsedCalendar:
-    lines = unfold_lines(text)
+    lines = _normalize_stream_lines(unfold_lines(text))
     events: list[CalendarEvent] = []
     timezones: list[CalendarTimeZone] = []
     index = 0
+    found_calendar = False
 
     while index < len(lines):
-        upper = lines[index].upper()
-        if upper == "BEGIN:VEVENT":
-            component, index = _consume_component(lines, index, "VEVENT")
-            events.append(_parse_event(component))
+        raw = lines[index]
+        if not raw:
+            index += 1
             continue
-        if upper == "BEGIN:VTIMEZONE":
-            component, index = _consume_component(lines, index, "VTIMEZONE")
-            timezones.append(_parse_timezone(component))
-            continue
-        index += 1
+        if raw.upper() != "BEGIN:VCALENDAR":
+            raise ValueError("iCalendar stream contains content outside VCALENDAR")
+
+        component, index = _consume_component(lines, index, "VCALENDAR")
+        object_events, object_timezones = _parse_calendar_object(component)
+        events.extend(object_events)
+        timezones.extend(object_timezones)
+        found_calendar = True
+
+    if not found_calendar:
+        raise ValueError("iCalendar stream does not contain a VCALENDAR object")
 
     tzids = [timezone.tzid for timezone in timezones]
     if len(set(tzids)) != len(tzids):
@@ -84,7 +90,68 @@ def parse_calendar(text: str) -> ParsedCalendar:
 def parse_events(text: str) -> list[CalendarEvent]:
     """Backward-compatible event-only parser used by callers and tests."""
 
-    return list(parse_calendar(text).events)
+    lines = _normalize_stream_lines(unfold_lines(text))
+    if any(line.upper() == "BEGIN:VCALENDAR" for line in lines):
+        return list(parse_calendar(text).events)
+
+    events: list[CalendarEvent] = []
+    index = 0
+    while index < len(lines):
+        if lines[index].upper() == "BEGIN:VEVENT":
+            component, index = _consume_component(lines, index, "VEVENT")
+            events.append(_parse_event(component))
+            continue
+        index += 1
+    return events
+
+
+def _normalize_stream_lines(lines: list[str]) -> list[str]:
+    normalized = list(lines)
+    for index, raw in enumerate(normalized):
+        if not raw:
+            continue
+        normalized[index] = raw.removeprefix("\ufeff")
+        break
+    return normalized
+
+
+def _parse_calendar_object(
+    component: list[str],
+) -> tuple[list[CalendarEvent], list[CalendarTimeZone]]:
+    body = component[1:-1]
+    events: list[CalendarEvent] = []
+    timezones: list[CalendarTimeZone] = []
+    index = 0
+
+    while index < len(body):
+        raw = body[index]
+        if not raw:
+            index += 1
+            continue
+
+        upper = raw.upper()
+        if upper == "BEGIN:VEVENT":
+            child, index = _consume_component(body, index, "VEVENT")
+            events.append(_parse_event(child))
+            continue
+        if upper == "BEGIN:VTIMEZONE":
+            child, index = _consume_component(body, index, "VTIMEZONE")
+            timezones.append(_parse_timezone(child))
+            continue
+        if upper == "BEGIN:VCALENDAR":
+            raise ValueError("Nested VCALENDAR objects are not supported")
+        if upper.startswith("BEGIN:"):
+            component_name = upper.split(":", 1)[1]
+            _, index = _consume_component(body, index, component_name)
+            continue
+
+        # Calendar-level properties are not currently used by CourseMesh, but
+        # validating their content-line syntax prevents arbitrary response bodies
+        # from being treated as an empty calendar snapshot.
+        parse_content_line(raw)
+        index += 1
+
+    return events, timezones
 
 
 def _consume_component(

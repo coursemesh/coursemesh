@@ -17,6 +17,22 @@ class ICalTests(unittest.TestCase):
         self.assertEqual(events[0].summary, "Operating Systems Sheet 4")
         self.assertEqual(events[0].starts_at, "20260924T215900Z")
 
+    def test_parse_calendar_rejects_non_calendar_response(self):
+        with self.assertRaisesRegex(ValueError, "VCALENDAR"):
+            parse_calendar("<html><body>Sign in</body></html>")
+
+    def test_parse_calendar_accepts_sequential_calendar_objects(self):
+        first = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:a\nSUMMARY:A\nEND:VEVENT\nEND:VCALENDAR\n"
+        second = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nUID:b\nSUMMARY:B\nEND:VEVENT\nEND:VCALENDAR\n"
+        calendar = parse_calendar(first + second)
+        self.assertEqual([event.uid for event in calendar.events], ["a", "b"])
+
+    def test_parse_calendar_accepts_utf8_bom_and_blank_outer_lines(self):
+        text = "\n\ufeffBEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR\n\n"
+        calendar = parse_calendar(text)
+        self.assertEqual(calendar.events, tuple())
+        self.assertEqual(calendar.timezones, tuple())
+
     def test_folded_line_is_unfolded(self):
         text = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:x\nSUMMARY:Very long\n title\nEND:VEVENT\nEND:VCALENDAR\n"
         event = parse_events(text)[0]
