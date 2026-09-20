@@ -49,6 +49,29 @@ class SyncTests(unittest.TestCase):
             second = sync_all(cfg)
             self.assertEqual(second.sources[0].changes[0].kind, "changed")
 
+    def test_non_calendar_response_preserves_last_known_good_snapshot(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "demo.ics"
+            source.write_text(ICS_A)
+            (root / "coursemesh.toml").write_text(
+                '''[coursemesh]\noutput_calendar="out.ics"\n[[sources]]\nid="demo"\nname="Demo"\npath="demo.ics"\n'''
+            )
+            cfg = load_config(root / "coursemesh.toml")
+            first = sync_all(cfg)
+            self.assertFalse(first.failed)
+            self.assertIn("SUMMARY:Math lecture", (root / "out.ics").read_text())
+
+            source.write_text("<html><body>Session expired</body></html>")
+            second = sync_all(cfg)
+
+            self.assertTrue(second.failed)
+            self.assertIn("VCALENDAR", second.sources[0].error)
+            self.assertEqual(second.sources[0].changes, tuple())
+            merged = (root / "out.ics").read_text()
+            self.assertIn("SUMMARY:Math lecture", merged)
+            self.assertNotIn("Session expired", merged)
+
     def test_vtimezone_survives_provider_failure_with_last_known_good_events(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

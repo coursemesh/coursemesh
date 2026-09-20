@@ -47,7 +47,7 @@ coursemesh.toml + environment
 
 ### iCalendar
 
-`ical.py` owns syntax-level parsing and rendering. It does not know Moodle or Stud.IP. `VEVENT` content lines are retained so provider-specific fields can survive a merge. `VTIMEZONE` components are preserved because RFC 5545 timezone-aware properties can depend on their definitions. Identical timezone definitions are deduplicated during merge; conflicting definitions for the same `TZID` are rejected rather than producing an ambiguous calendar.
+`ical.py` owns syntax-level parsing and rendering. It does not know Moodle or Stud.IP. Incoming provider data must contain a valid top-level `VCALENDAR` envelope before it can replace persisted source state; non-calendar responses fail the source and leave the last-known-good snapshot intact. `VEVENT` content lines are retained so provider-specific fields can survive a merge. `VTIMEZONE` components are preserved because RFC 5545 timezone-aware properties can depend on their definitions. Identical timezone definitions are deduplicated during merge; conflicting definitions for the same `TZID` are rejected rather than producing an ambiguous calendar.
 
 ### State
 
